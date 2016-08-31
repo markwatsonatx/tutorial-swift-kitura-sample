@@ -1,0 +1,10 @@
+version: '2'
+services:
+  web:
+    image: markwatsonatx/swift-kitura-sample:0.28    
+    volumes:
+      - ./src:/usr/src
+    environment:
+      - KITURA_SAMPLE_HOME=/usr/src
+    ports:
+      - "38090:8090"
