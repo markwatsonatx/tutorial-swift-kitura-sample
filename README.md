@@ -1,6 +1,6 @@
 Run and experiment with the [IBM Swift Kitura Sample](https://github.com/IBM-Swift/Kitura-Sample) in Docker.
 
-Clone this repository, cd into the root directory, and run docker-compose up.
+Clone this repository, cd into the root directory, and run `docker-compose up`.
 
 Connect to the Kitura Sample at http://127.0.0.1:38090.
 
