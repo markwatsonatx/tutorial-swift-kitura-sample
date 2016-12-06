@@ -1,7 +1,7 @@
 version: '2'
 services:
   web:
-    image: markwatsonatx/swift-kitura-sample:0.32    
+    image: markwatsonatx/swift-kitura-sample:1.2    
     volumes:
       - ./src:/usr/src
     environment:
