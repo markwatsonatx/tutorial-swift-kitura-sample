@@ -15,10 +15,16 @@ This is a sample [Kitura](https://github.com/IBM-Swift/Kitura/) application. See
 1. `git clone https://github.com/IBM-Swift/Kitura-Sample.git && cd Kitura-Sample`
 > Note: do not use the GitHub "Download ZIP" button
 
-2. `make run`
+2. `swift build`
 
-  You should see message _Listening on port 8090_. The result executable is located in `.build/debug` directory: `./.build/debug/KituraSample`
-3. Open your browser at [http://localhost:8090](http://localhost:8090)
+3. `./.build/debug/Kitura-Sample`
+
+  You should see message _Listening on port 8090_.
+  
+4. Open your browser at [http://localhost:8090](http://localhost:8090)
+
+## Testing
+`swift test`
 
 ## Running in Xcode
 

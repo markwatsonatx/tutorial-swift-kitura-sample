@@ -24,26 +24,23 @@ import Foundation
 
 import KituraSampleRouter
 
-protocol KituraTest {
-    func expectation(_ index: Int) -> XCTestExpectation
-    func waitExpectation(timeout t: TimeInterval, handler: XCWaitCompletionHandler?)
-}
-
-extension KituraTest {
-
-    func doSetUp() {
+class KituraTest: XCTestCase {
+    private static let initOnce: () = {
         HeliumLogger.use()
+    }()
+
+    override func setUp() {
+        KituraTest.initOnce
     }
 
-    func doTearDown() {
-        // sleep(10)
+    override func tearDown() {
     }
 
     func performServerTest(asyncTasks: @escaping (XCTestExpectation) -> Void...) {
         let router = RouterCreator.create()
         Kitura.addHTTPServer(onPort: 8090, with: router)
         Kitura.start()
-        sleep(1)
+
         let requestQueue = DispatchQueue(label: "Request queue")
 
         for (index, asyncTask) in asyncTasks.enumerated() {
@@ -60,7 +57,10 @@ extension KituraTest {
         }
     }
 
-    func performRequest(_ method: String, path: String,  headers: [String: String]? = nil, requestModifier: ((ClientRequest) -> Void)? = nil, callback: @escaping ClientRequest.Callback) {
+    func performRequest(_ method: String, path: String,  expectation: XCTestExpectation,
+                        headers: [String: String]? = nil,
+                        requestModifier: ((ClientRequest) -> Void)? = nil,
+                        callback: @escaping (ClientResponse) -> Void) {
         var allHeaders = [String: String]()
         if  let headers = headers {
             for  (headerName, headerValue) in headers {
@@ -72,15 +72,33 @@ extension KituraTest {
         }
         let options: [ClientRequest.Options] =
             [.method(method), .hostname("localhost"), .port(8090), .path(path), .headers(allHeaders)]
-        let req = HTTP.request(options, callback: callback)
+        let req = HTTP.request(options) { response in
+            guard let response = response else {
+                XCTFail("response object is nil")
+                expectation.fulfill()
+                return
+            }
+            callback(response)
+        }
         if let requestModifier = requestModifier {
             requestModifier(req)
         }
         req.end()
     }
-}
 
-extension XCTestCase: KituraTest {
+    func performRequestSynchronous(_ method: String, path: String,  expectation: XCTestExpectation,
+                        headers: [String: String]? = nil,
+                        requestModifier: ((ClientRequest) -> Void)? = nil,
+                        callback: @escaping (ClientResponse, DispatchGroup) -> Void) {
+        let dispatchGroup = DispatchGroup()
+        dispatchGroup.enter()
+        performRequest(method, path: path, expectation: expectation, headers: headers,
+                       requestModifier: requestModifier) { response in
+                        callback(response, dispatchGroup)
+        }
+        dispatchGroup.wait()
+    }
+
     func expectation(_ index: Int) -> XCTestExpectation {
         let expectationDescription = "\(type(of: self))-\(index)"
         return self.expectation(description: expectationDescription)

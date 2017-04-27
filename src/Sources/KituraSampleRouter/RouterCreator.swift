@@ -19,8 +19,10 @@
 import Foundation
 
 import Kitura
+import KituraMarkdown
 import KituraMustache
-import KituraStencil
+import KituraStencil // required for using StencilTemplateEngine
+import Stencil // required for adding a Stencil namespace to StencilTemplateEngine
 
 import LoggerAPI
 import HeliumLogger
@@ -30,8 +32,25 @@ import HeliumLogger
 #endif
 // Error handling example
 
-enum SampleError: Swift.Error {
+enum SampleError: Error {
     case sampleError
+}
+
+let customParameterHandler: RouterHandler = { request, response, next in
+    let id = request.parameters["id"] ?? "unknown"
+    response.send("\(id)|").status(.OK)
+    next()
+}
+
+class CustomParameterMiddleware: RouterMiddleware {
+    func handle(request: RouterRequest, response: RouterResponse, next: @escaping () -> Void) {
+        do {
+            try customParameterHandler(request, response, next)
+        } catch {
+            Log.error("customParameterHandler returned error: \(error)")
+        }
+
+    }
 }
 
 extension SampleError: CustomStringConvertible {
@@ -54,7 +73,7 @@ public struct RouterCreator {
         class BasicAuthMiddleware: RouterMiddleware {
             func handle(request: RouterRequest, response: RouterResponse, next: @escaping () -> Void) {
                 let authString = request.headers["Authorization"]
-                Log.info("Authorization: \(authString)")
+                Log.info("Authorization: \(String(describing: authString))")
                 // Check authorization string in database to approve the request if fail
                 // response.error = NSError(domain: "AuthFailure", code: 1, userInfo: [:])
                 next()
@@ -105,7 +124,7 @@ public struct RouterCreator {
 
         // Redirection example
         router.get("/redir") { _, response, next in
-            try response.redirect("http://www.ibm.com")
+            try response.redirect("http://www.ibm.com/us-en/")
             next()
         }
 
@@ -132,7 +151,16 @@ public struct RouterCreator {
             try response.send("I come afterward..\n").end()
         }
 
-        router.add(templateEngine: StencilTemplateEngine())
+        router.get("/user/:id", allowPartialMatch: false, middleware: CustomParameterMiddleware())
+        router.get("/user/:id", handler: customParameterHandler)
+
+        // add Stencil Template Engine with a extension with a custom tag
+        let _extension = Extension()
+        // from https://github.com/kylef/Stencil/blob/master/ARCHITECTURE.md#simple-tags
+        _extension.registerSimpleTag("custom") { _ in
+            return "Hello World"
+        }
+        router.add(templateEngine: StencilTemplateEngine(extension: _extension))
 
         // Support for Mustache implemented for OSX only yet
         #if !os(Linux)
@@ -179,6 +207,55 @@ public struct RouterCreator {
             }
         }
 
+        router.get("/articles_include") { _, response, next in
+            defer {
+                next()
+            }
+            do {
+                // the example from https://github.com/kylef/Stencil
+                let context: [String: Any] = [
+                    "articles": [
+                        [ "title": "Migrating from OCUnit to XCTest", "author": "Kyle Fuller" ],
+                        [ "title": "Memory Management with ARC", "author": "Kyle Fuller" ],
+                    ]
+                ]
+
+                // we have to specify file extension here since Stencil is not the default engine
+                try response.render("includingDocument.stencil", context: context).end()
+            } catch {
+                Log.error("Failed to render template \(error)")
+            }
+        }
+
+        router.get("/custom_tag_stencil") { _, response, next in
+            defer {
+                next()
+            }
+            do {
+                // we have to specify file extension here since Stencil is not the default engine
+                try response.render("customTag.stencil", context: [:]).end()
+            } catch {
+                Log.error("Failed to render template \(error)")
+            }
+        }
+
+        // Add KituraMarkdown as a TemplateEngine
+        router.add(templateEngine: KituraMarkdown())
+
+        router.get("/docs") { _, response, next in
+            try response.render("/docs/index.md", context: [String:Any]())
+            response.status(.OK)
+            next()
+        }
+
+        router.get("/docs/*") { request, response, next in
+            if request.urlURL.path != "/docs/" {
+                try response.render(request.urlURL.path, context: [String:Any]())
+                response.status(.OK)
+            }
+            next()
+        }
+
         // Handles any errors that get set
         router.error { request, response, next in
             response.headers["Content-Type"] = "text/plain; charset=utf-8"
@@ -195,7 +272,8 @@ public struct RouterCreator {
         router.all { request, response, next in
             if  response.statusCode == .unknown  {
                 // Remove this wrapping if statement, if you want to handle requests to / as well
-                if  request.originalURL != "/"  &&  request.originalURL != ""  {
+                let path = request.urlURL.path
+                if  path != "/" && path != ""  {
                     try response.status(.notFound).send("Route not found in Sample application!").end()
                 }
             }
